@@ -3,7 +3,6 @@ import io
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
-from weasyprint import HTML
 from sqlalchemy.orm import Session
 
 from app.models.contract import Contract
@@ -46,6 +45,7 @@ def generate_report_html(contract_id: int, db: Session) -> str:
 
 def generate_report_pdf(contract_id: int, db: Session) -> bytes:
     """Generate PDF report."""
+    from weasyprint import HTML  # lazy import — needs system libs (pango)
     html_str = generate_report_html(contract_id, db)
     pdf = HTML(string=html_str).write_pdf()
     return pdf

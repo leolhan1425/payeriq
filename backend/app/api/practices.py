@@ -13,11 +13,12 @@ router = APIRouter()
 
 @router.post("", response_model=PracticeResponse)
 def create_practice(body: PracticeCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Resolve GPCI locality from ZIP
+    # Resolve GPCI locality + carrier from ZIP
     zl = db.query(ZipLocality).filter(ZipLocality.zip_code == body.zip_code).first()
     locality = zl.locality if zl else None
+    carrier = zl.carrier if zl else None
 
-    practice = Practice(name=body.name, zip_code=body.zip_code, gpci_locality=locality, owner_id=user.id)
+    practice = Practice(name=body.name, zip_code=body.zip_code, gpci_locality=locality, gpci_carrier=carrier, owner_id=user.id)
     db.add(practice)
     db.commit()
     db.refresh(practice)

@@ -34,13 +34,13 @@ def compare_contract_rates(contract_id: int, db: Session) -> dict:
     if not practice or not practice.gpci_locality:
         raise ValueError("Practice has no GPCI locality set")
 
-    gpci = (
-        db.query(GPCILocality)
-        .filter(GPCILocality.locality_number == practice.gpci_locality)
-        .first()
-    )
+    # Look up GPCI by MAC/carrier + locality number for unambiguous match
+    gpci_query = db.query(GPCILocality).filter(GPCILocality.locality_number == practice.gpci_locality)
+    if practice.gpci_carrier:
+        gpci_query = gpci_query.filter(GPCILocality.mac == practice.gpci_carrier)
+    gpci = gpci_query.first()
     if not gpci:
-        raise ValueError(f"GPCI data not found for locality {practice.gpci_locality}")
+        raise ValueError(f"GPCI data not found for carrier={practice.gpci_carrier} locality={practice.gpci_locality}")
 
     results = {"matched": 0, "unmatched": 0, "total_variance": 0.0, "rates": []}
 

@@ -25,3 +25,6 @@ backend/uploads/*
 
 # Docker
 docker-data/
+
+# CMS data files (large, downloaded separately)
+backend/data/
