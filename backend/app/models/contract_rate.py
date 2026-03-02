@@ -20,4 +20,13 @@ class ContractRate(Base):
     variance: Mapped[float | None] = mapped_column(Float, nullable=True)
     pct_of_medicare: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Enhanced benchmarks
+    benchmark_source: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "PFS", "CLFS"
+    national_volume: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    national_avg_allowed: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Commercial benchmark (from Transparency in Coverage)
+    commercial_avg_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pct_of_commercial: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     contract: Mapped["Contract"] = relationship(back_populates="rates")

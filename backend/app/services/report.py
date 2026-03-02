@@ -67,6 +67,14 @@ def generate_report_html(contract_id: int, db: Session) -> str:
         summary["total_variance"] = round(summary["total_contracted"] - summary["total_medicare"], 2)
         summary["below_medicare"] = len([r for r in matched if (r.pct_of_medicare or 0) < 100])
         summary["above_medicare"] = len([r for r in matched if (r.pct_of_medicare or 0) >= 100])
+        # Volume-weighted average
+        with_vol = [r for r in matched if r.national_volume and r.national_volume > 0 and r.pct_of_medicare]
+        if with_vol:
+            weighted = sum(r.pct_of_medicare * r.national_volume for r in with_vol)
+            total_vol = sum(r.national_volume for r in with_vol)
+            summary["volume_weighted_pct"] = round(weighted / total_vol, 1)
+        else:
+            summary["volume_weighted_pct"] = None
     summary["matched_count"] = len(matched)
     summary["unmatched_count"] = len(unmatched)
 

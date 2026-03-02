@@ -21,6 +21,11 @@ class ContractRateResponse(BaseModel):
     medicare_rate: float | None
     variance: float | None
     pct_of_medicare: float | None
+    benchmark_source: str | None
+    national_volume: int | None
+    national_avg_allowed: float | None
+    commercial_avg_rate: float | None
+    pct_of_commercial: float | None
 
     model_config = {"from_attributes": True}
 

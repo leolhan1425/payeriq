@@ -8,8 +8,10 @@ from pathlib import Path
 import httpx
 from sqlalchemy.orm import Session
 
+from collections import defaultdict
+
 from app.core.database import SessionLocal
-from app.models.medicare import MedicareRate, GPCILocality, ZipLocality
+from app.models.medicare import MedicareRate, GPCILocality, ZipLocality, LabFeeSchedule, Utilization, CommercialBenchmark
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +154,120 @@ def load_zip_crosswalk(filepath: str | Path, db: Session) -> int:
 
         logger.info("Loaded %d ZIP-locality records", count)
         return count
+
+
+def load_clfs_from_csv(filepath: str | Path, db: Session) -> int:
+    """Parse Clinical Lab Fee Schedule CSV.
+
+    File has a 4-row preamble, then header:
+    YEAR,HCPCS,MOD,EFF_DATE,INDICATOR,RATE,SHORTDESC,LONGDESC,EXTENDED LONGDESC
+    """
+    with open(filepath, "r", encoding="cp1252") as f:
+        for _ in range(4):
+            next(f)
+        reader = csv.DictReader(f)
+        count = 0
+        batch = []
+        for row in reader:
+            code = row.get("HCPCS", "").strip()
+            rate_val = _float(row.get("RATE", 0))
+            if not code or rate_val <= 0:
+                continue
+            rec = LabFeeSchedule(
+                cpt_code=code,
+                modifier=row.get("MOD", "").strip() or None,
+                rate=rate_val,
+                description=row.get("SHORTDESC", "").strip() or row.get("LONGDESC", "").strip() or None,
+            )
+            batch.append(rec)
+            count += 1
+            if len(batch) >= 1000:
+                db.bulk_save_objects(batch)
+                batch = []
+        if batch:
+            db.bulk_save_objects(batch)
+        db.commit()
+        logger.info("Loaded %d CLFS records", count)
+        return count
+
+
+def load_utilization_from_csv(filepath: str | Path, db: Session) -> int:
+    """Parse Medicare PSPS utilization CSV and aggregate to national totals per HCPCS.
+
+    The raw file has ~14M rows at carrier/locality/specialty level.
+    We aggregate to one row per HCPCS code with total services, allowed, payment.
+    """
+    logger.info("Aggregating utilization data (this may take a minute)...")
+    agg = defaultdict(lambda: {"services": 0, "allowed": 0.0, "payment": 0.0})
+
+    with open(filepath, "r", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            code = row.get("HCPCS_CD", "").strip()
+            if not code:
+                continue
+            services = _int(row.get("PSPS_SUBMITTED_SERVICE_CNT", 0))
+            allowed = _float(row.get("PSPS_ALLOWED_CHARGE_AMT", 0))
+            payment = _float(row.get("PSPS_NCH_PAYMENT_AMT", 0))
+            agg[code]["services"] += services
+            agg[code]["allowed"] += allowed
+            agg[code]["payment"] += payment
+
+    count = 0
+    batch = []
+    for code, vals in agg.items():
+        total_svc = vals["services"]
+        rec = Utilization(
+            cpt_code=code,
+            total_services=total_svc,
+            total_allowed=round(vals["allowed"], 2),
+            total_payment=round(vals["payment"], 2),
+            avg_allowed=round(vals["allowed"] / total_svc, 2) if total_svc > 0 else 0.0,
+        )
+        batch.append(rec)
+        count += 1
+        if len(batch) >= 1000:
+            db.bulk_save_objects(batch)
+            batch = []
+    if batch:
+        db.bulk_save_objects(batch)
+    db.commit()
+    logger.info("Loaded %d utilization records (aggregated from PSPS)", count)
+    return count
+
+
+def load_commercial_from_json(filepath: str | Path, db: Session) -> int:
+    """Load commercial benchmark rates from DoltHub TiC JSON export."""
+    import json
+    with open(filepath, "r") as f:
+        rows = json.load(f)
+    count = 0
+    for row in rows:
+        code = row.get("billing_code", "").strip()
+        avg = _float(row.get("avg_rate", 0))
+        if not code or avg <= 0:
+            continue
+        rec = CommercialBenchmark(
+            cpt_code=code,
+            avg_rate=avg,
+            std_rate=_float(row.get("std_rate")) if row.get("std_rate") else None,
+            min_rate=_float(row.get("min_rate")) if row.get("min_rate") else None,
+            max_rate=_float(row.get("max_rate")) if row.get("max_rate") else None,
+            sample_size=_int(row.get("n", 0)),
+            source="UHC-TiC",
+        )
+        db.add(rec)
+        count += 1
+    db.commit()
+    logger.info("Loaded %d commercial benchmark records", count)
+    return count
+
+
+def _int(val) -> int:
+    try:
+        return int(float(val))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _float(val) -> float:

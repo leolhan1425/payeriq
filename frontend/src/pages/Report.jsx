@@ -38,6 +38,12 @@ export default function Report() {
   const totalVariance = matched.reduce((sum, r) => sum + (r.variance || 0), 0).toFixed(2)
   const belowCount = matched.filter((r) => (r.pct_of_medicare || 0) < 100).length
 
+  // Volume-weighted average % of Medicare
+  const withVol = matched.filter((r) => r.national_volume > 0 && r.pct_of_medicare)
+  const volWeightedPct = withVol.length > 0
+    ? (withVol.reduce((sum, r) => sum + r.pct_of_medicare * r.national_volume, 0) / withVol.reduce((sum, r) => sum + r.national_volume, 0)).toFixed(1)
+    : null
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -50,7 +56,7 @@ export default function Report() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-2xl font-bold text-indigo-700">{matched.length}</div>
           <div className="text-sm text-gray-500">Codes Matched</div>
@@ -59,6 +65,12 @@ export default function Report() {
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <div className={`text-2xl font-bold ${parseFloat(avgPct) < 100 ? 'text-red-600' : 'text-green-600'}`}>{avgPct}%</div>
             <div className="text-sm text-gray-500">Avg % of Medicare</div>
+          </div>
+        )}
+        {volWeightedPct && (
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className={`text-2xl font-bold ${parseFloat(volWeightedPct) < 100 ? 'text-red-600' : 'text-green-600'}`}>{volWeightedPct}%</div>
+            <div className="text-sm text-gray-500">Volume-Weighted Avg</div>
           </div>
         )}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -79,8 +91,12 @@ export default function Report() {
               <th className="text-left px-4 py-3 text-sm font-medium text-gray-500">Description</th>
               <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">Contract</th>
               <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">Medicare</th>
+              <th className="text-center px-4 py-3 text-sm font-medium text-gray-500">Source</th>
               <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">Variance</th>
               <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">% Medicare</th>
+              <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">Comm Avg</th>
+              <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">% Comm</th>
+              <th className="text-right px-4 py-3 text-sm font-medium text-gray-500">Natl Volume</th>
             </tr>
           </thead>
           <tbody>
@@ -90,11 +106,21 @@ export default function Report() {
                 <td className="px-4 py-3 text-sm text-gray-600">{r.description}</td>
                 <td className="px-4 py-3 text-right text-sm">${r.contracted_rate.toFixed(2)}</td>
                 <td className="px-4 py-3 text-right text-sm">${r.medicare_rate.toFixed(2)}</td>
+                <td className="px-4 py-3 text-center text-xs text-gray-400">{r.benchmark_source}</td>
                 <td className={`px-4 py-3 text-right text-sm font-medium ${r.variance < 0 ? 'text-red-600' : 'text-green-600'}`}>
                   ${r.variance.toFixed(2)}
                 </td>
                 <td className={`px-4 py-3 text-right text-sm font-medium ${(r.pct_of_medicare || 0) < 100 ? 'text-red-600' : 'text-green-600'}`}>
                   {r.pct_of_medicare}%
+                </td>
+                <td className="px-4 py-3 text-right text-sm text-gray-500">
+                  {r.commercial_avg_rate ? `$${r.commercial_avg_rate.toFixed(2)}` : ''}
+                </td>
+                <td className={`px-4 py-3 text-right text-sm font-medium ${r.pct_of_commercial && r.pct_of_commercial < 100 ? 'text-red-600' : r.pct_of_commercial ? 'text-green-600' : ''}`}>
+                  {r.pct_of_commercial ? `${r.pct_of_commercial}%` : ''}
+                </td>
+                <td className="px-4 py-3 text-right text-xs text-gray-400">
+                  {r.national_volume ? r.national_volume.toLocaleString() : ''}
                 </td>
               </tr>
             ))}
