@@ -1,5 +1,7 @@
 """Report generation service — HTML + PDF via WeasyPrint."""
 import io
+import os
+import sys
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
@@ -9,6 +11,42 @@ from app.models.contract import Contract
 from app.models.practice import Practice
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
+
+# Fix WeasyPrint library discovery on macOS with Homebrew.
+# WeasyPrint uses cffi.dlopen() which searches standard paths.
+# On macOS, Homebrew libs live in /opt/homebrew/lib and aren't in the default search path.
+# We patch cffi's ffi.dlopen to also try /opt/homebrew/lib/<name>.dylib variants.
+if sys.platform == "darwin":
+    _brew_lib = "/opt/homebrew/lib"
+    if os.path.isdir(_brew_lib):
+        import cffi
+
+        _orig_dlopen = cffi.FFI.dlopen
+
+        def _patched_dlopen(self, *args, **kwargs):
+            try:
+                return _orig_dlopen(self, *args, **kwargs)
+            except OSError:
+                name = args[0] if args else ""
+                # Try Homebrew path with .dylib extension
+                for suffix in [".dylib", ".0.dylib"]:
+                    brew_path = os.path.join(_brew_lib, f"lib{name}{suffix}")
+                    if os.path.exists(brew_path):
+                        return _orig_dlopen(self, brew_path, **(kwargs or {}))
+                    # Also try the name as-is with .dylib
+                    brew_path = os.path.join(_brew_lib, f"{name}.dylib")
+                    if os.path.exists(brew_path):
+                        return _orig_dlopen(self, brew_path, **(kwargs or {}))
+                # If name looks like libfoo-X.Y-Z, try libfoo-X.Y.Z.dylib
+                if isinstance(name, str) and "-" in name:
+                    parts = name.rsplit("-", 1)
+                    dylib_name = f"{parts[0]}.{parts[1]}.dylib"
+                    brew_path = os.path.join(_brew_lib, dylib_name)
+                    if os.path.exists(brew_path):
+                        return _orig_dlopen(self, brew_path, **(kwargs or {}))
+                raise
+
+        cffi.FFI.dlopen = _patched_dlopen
 
 
 def generate_report_html(contract_id: int, db: Session) -> str:
@@ -45,7 +83,7 @@ def generate_report_html(contract_id: int, db: Session) -> str:
 
 def generate_report_pdf(contract_id: int, db: Session) -> bytes:
     """Generate PDF report."""
-    from weasyprint import HTML  # lazy import — needs system libs (pango)
+    from weasyprint import HTML
     html_str = generate_report_html(contract_id, db)
     pdf = HTML(string=html_str).write_pdf()
     return pdf
