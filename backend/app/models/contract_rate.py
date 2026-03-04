@@ -29,4 +29,7 @@ class ContractRate(Base):
     commercial_avg_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
     pct_of_commercial: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Extraction confidence
+    extraction_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     contract: Mapped["Contract"] = relationship(back_populates="rates")

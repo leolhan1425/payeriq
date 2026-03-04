@@ -60,6 +60,9 @@ export default function RateReview() {
     )
   }
 
+  const feeType = contract?.fee_schedule_type
+  const confidence = contract?.extraction_confidence
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -72,6 +75,24 @@ export default function RateReview() {
           {comparing ? 'Comparing...' : 'Compare to Medicare'}
         </button>
       </div>
+
+      {/* Extraction metadata summary */}
+      {(contract?.effective_date || feeType || confidence != null) && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h3 className="text-sm font-semibold text-blue-800 mb-2">Extracted Contract Metadata</h3>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-blue-700">
+            {contract?.effective_date && <span>Effective: {contract.effective_date}</span>}
+            {contract?.expiration_date && <span>Expires: {contract.expiration_date}</span>}
+            {feeType && (
+              <span>Fee Schedule: {feeType === 'percent_of_medicare' ? `% of Medicare${contract.medicare_percentage ? ` (${contract.medicare_percentage}%)` : ''}` : feeType === 'flat_fee' ? 'Flat Fee' : feeType}</span>
+            )}
+            {confidence != null && (
+              <span>Confidence: {(confidence * 100).toFixed(0)}%</span>
+            )}
+          </div>
+          <p className="text-xs text-blue-500 mt-2">Verify this information matches your contract. Rates below are editable.</p>
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full">

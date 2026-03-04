@@ -16,6 +16,7 @@ from app.services.extraction import extract_rates_from_pdf
 router = APIRouter()
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 
 @router.post("", response_model=ContractResponse)
@@ -31,13 +32,23 @@ async def upload_contract(
     if not practice:
         raise HTTPException(status_code=404, detail="Practice not found")
 
+    # Read file content for validation
+    content = await file.read()
+
+    # Validate file size
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 20 MB.")
+
+    # Validate PDF magic bytes
+    if not content[:5] == b"%PDF-":
+        raise HTTPException(status_code=400, detail="Invalid file format. Please upload a PDF.")
+
     # Save file
     ext = Path(file.filename or "contract.pdf").suffix
     filename = f"{uuid.uuid4()}{ext}"
     filepath = UPLOAD_DIR / filename
     UPLOAD_DIR.mkdir(exist_ok=True)
     with open(filepath, "wb") as f:
-        content = await file.read()
         f.write(content)
 
     contract = Contract(

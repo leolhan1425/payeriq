@@ -1,6 +1,112 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import api from '../api'
+
+const TERM_EXPLANATIONS = {
+  auto_renewal: 'The contract automatically renews unless terminated within the notice window. Missing the deadline locks you into another term.',
+  unilateral_amendment: 'The payer can modify contract terms (including rates) without your consent. This is one of the most unfavorable provisions for providers.',
+  lesser_of_clause: 'You receive the lesser of your billed charge or the fee schedule amount. If you bill below the fee schedule, you lose the difference.',
+  timely_filing: 'Claims must be submitted within this many days. Shorter windows increase denial risk, especially for delayed authorizations.',
+}
+
+function ContractTerms({ contract }) {
+  const [expanded, setExpanded] = useState(null)
+  const hasTerms = contract.effective_date || contract.fee_schedule_type ||
+    contract.auto_renewal != null || contract.unilateral_amendment != null ||
+    contract.lesser_of_clause != null || contract.timely_filing_days
+
+  if (!hasTerms) return null
+
+  const terms = []
+  if (contract.effective_date) {
+    terms.push({ label: 'Effective Date', value: contract.effective_date, status: 'neutral' })
+  }
+  if (contract.expiration_date) {
+    terms.push({ label: 'Expiration Date', value: contract.expiration_date, status: 'neutral' })
+  }
+  if (contract.fee_schedule_type) {
+    const val = contract.fee_schedule_type === 'percent_of_medicare'
+      ? `% of Medicare${contract.medicare_percentage ? ` (${contract.medicare_percentage}%)` : ''}`
+      : contract.fee_schedule_type === 'flat_fee' ? 'Flat Fee' : contract.fee_schedule_type
+    terms.push({ label: 'Fee Schedule Type', value: val, status: 'neutral' })
+  }
+  if (contract.auto_renewal != null) {
+    const notice = contract.auto_renewal && contract.termination_notice_days
+      ? ` (${contract.termination_notice_days}-day notice to terminate)` : ''
+    terms.push({
+      label: 'Auto-Renewal',
+      value: (contract.auto_renewal ? 'Yes' : 'No') + notice,
+      status: contract.auto_renewal ? 'warn' : 'good',
+      key: 'auto_renewal',
+    })
+  }
+  if (contract.unilateral_amendment != null) {
+    terms.push({
+      label: 'Unilateral Amendment',
+      value: contract.unilateral_amendment ? 'Yes — payer can change terms without consent' : 'No',
+      status: contract.unilateral_amendment ? 'warn' : 'good',
+      key: 'unilateral_amendment',
+    })
+  }
+  if (contract.lesser_of_clause != null) {
+    terms.push({
+      label: 'Lesser-of Clause',
+      value: contract.lesser_of_clause ? 'Yes — pays lesser of billed charges or fee schedule' : 'No',
+      status: contract.lesser_of_clause ? 'warn' : 'good',
+      key: 'lesser_of_clause',
+    })
+  }
+  if (contract.timely_filing_days) {
+    const isShort = contract.timely_filing_days < 90
+    terms.push({
+      label: 'Timely Filing',
+      value: `${contract.timely_filing_days} days${isShort ? ' — shorter than industry standard 90 days' : ''}`,
+      status: isShort ? 'warn' : 'good',
+      key: 'timely_filing',
+    })
+  }
+
+  const warnings = terms.filter((t) => t.status === 'warn')
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-lg font-bold mb-3">
+        Contract Terms
+        {warnings.length > 0 && (
+          <span className="ml-2 text-sm font-medium text-red-600">
+            {warnings.length} warning{warnings.length > 1 ? 's' : ''}
+          </span>
+        )}
+      </h2>
+      <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+        {terms.map((t, i) => (
+          <div key={i}>
+            <div
+              className={`flex items-center px-4 py-3 ${t.key ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+              onClick={() => t.key && setExpanded(expanded === t.key ? null : t.key)}
+            >
+              <span className={`w-6 text-center font-bold text-sm mr-3 ${
+                t.status === 'warn' ? 'text-red-500' : t.status === 'good' ? 'text-green-500' : 'text-gray-400'
+              }`}>
+                {t.status === 'warn' ? '!' : t.status === 'good' ? '+' : '-'}
+              </span>
+              <span className="font-medium text-sm text-gray-700 w-48">{t.label}</span>
+              <span className="text-sm text-gray-600 flex-1">{t.value}</span>
+              {t.key && (
+                <span className="text-gray-400 text-xs ml-2">{expanded === t.key ? 'hide' : 'info'}</span>
+              )}
+            </div>
+            {expanded === t.key && TERM_EXPLANATIONS[t.key] && (
+              <div className="px-4 pb-3 pl-13 text-xs text-gray-500 bg-gray-50 ml-9">
+                {TERM_EXPLANATIONS[t.key]}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function Report() {
   const { id } = useParams()
@@ -44,6 +150,16 @@ export default function Report() {
     ? (withVol.reduce((sum, r) => sum + r.pct_of_medicare * r.national_volume, 0) / withVol.reduce((sum, r) => sum + r.national_volume, 0)).toFixed(1)
     : null
 
+  // Revenue impact estimate
+  const scaleFactor = 1 / 10000
+  let annualImpact = 0
+  for (const r of matched) {
+    if (r.variance < 0 && r.national_volume > 0) {
+      annualImpact += Math.abs(r.variance) * r.national_volume * scaleFactor
+    }
+  }
+  annualImpact = annualImpact > 0 ? annualImpact : null
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -51,9 +167,15 @@ export default function Report() {
           <h1 className="text-2xl font-bold">Contract Analysis Report</h1>
           <p className="text-gray-500">{contract?.payer_name}</p>
         </div>
-        <button onClick={downloadPdf} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">
-          Download PDF
-        </button>
+        <div className="flex gap-3">
+          <Link to={`/contracts/${id}/negotiate`}
+            className="px-4 py-2 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700">
+            Generate Negotiation Letter
+          </Link>
+          <button onClick={downloadPdf} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">
+            Download PDF
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
@@ -82,6 +204,23 @@ export default function Report() {
           <div className="text-sm text-gray-500">Below Medicare</div>
         </div>
       </div>
+
+      {/* Revenue Impact Card */}
+      {annualImpact && (
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-6 mb-8">
+          <div className="flex items-baseline gap-3 mb-2">
+            <span className="text-3xl font-bold text-red-600">${Math.round(annualImpact).toLocaleString()}</span>
+            <span className="text-lg font-semibold text-red-700">Estimated Annual Impact</span>
+          </div>
+          <p className="text-sm text-red-600/70">
+            Based on national Medicare utilization data scaled to a solo practice (~1/10,000 of national volume).
+            Actual impact varies by practice size, payer mix, and case volume. This is a directional estimate.
+          </p>
+        </div>
+      )}
+
+      {/* Contract Terms */}
+      {contract && <ContractTerms contract={contract} />}
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
         <table className="w-full">

@@ -2,9 +2,23 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api'
 
+const SPECIALTIES = [
+  'Family Medicine',
+  'Internal Medicine',
+  'Pediatrics',
+  'OB/GYN',
+  'General Surgery',
+  'Orthopedics',
+  'Cardiology',
+  'Dermatology',
+  'Psychiatry',
+  'Other',
+]
+
 export default function PracticeSetup() {
   const [name, setName] = useState('')
   const [zip, setZip] = useState('')
+  const [specialty, setSpecialty] = useState('')
   const [practices, setPractices] = useState([])
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -17,10 +31,15 @@ export default function PracticeSetup() {
     e.preventDefault()
     setError('')
     try {
-      const res = await api.post('/practices', { name, zip_code: zip })
+      const res = await api.post('/practices', {
+        name,
+        zip_code: zip,
+        specialty: specialty || null,
+      })
       setPractices([...practices, res.data])
       setName('')
       setZip('')
+      setSpecialty('')
       navigate('/dashboard')
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to create practice')
@@ -39,7 +58,10 @@ export default function PracticeSetup() {
               <div key={p.id} className="bg-white rounded-lg border border-gray-200 p-4 flex justify-between items-center">
                 <div>
                   <div className="font-medium">{p.name}</div>
-                  <div className="text-sm text-gray-500">ZIP: {p.zip_code} | GPCI Locality: {p.gpci_locality || 'Not resolved'}</div>
+                  <div className="text-sm text-gray-500">
+                    ZIP: {p.zip_code} | GPCI Locality: {p.gpci_locality || 'Not resolved'}
+                    {p.specialty && ` | ${p.specialty}`}
+                  </div>
                 </div>
               </div>
             ))}
@@ -63,6 +85,16 @@ export default function PracticeSetup() {
               placeholder="e.g. 97201"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
             <p className="text-xs text-gray-400 mt-1">Used to look up your GPCI locality for Medicare rate adjustments</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Specialty</label>
+            <select value={specialty} onChange={(e) => setSpecialty(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+              <option value="">Select a specialty (optional)</option>
+              {SPECIALTIES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
           </div>
           <button type="submit" className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700">
             Create Practice

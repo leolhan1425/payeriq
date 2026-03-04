@@ -11,12 +11,24 @@
   .stat-card { background: #f0f4ff; border-radius: 8px; padding: 16px 24px; min-width: 140px; }
   .stat-card .value { font-size: 28px; font-weight: 700; color: #0f3460; }
   .stat-card .label { font-size: 12px; color: #666; margin-top: 4px; }
+  .impact-card { background: #fff5f5; border: 2px solid #c0392b; border-radius: 8px; padding: 16px 24px; min-width: 200px; }
+  .impact-card .value { font-size: 28px; font-weight: 700; color: #c0392b; }
+  .impact-card .label { font-size: 12px; color: #666; margin-top: 4px; }
   table { width: 100%; border-collapse: collapse; margin-top: 16px; }
   th { background: #0f3460; color: white; padding: 10px 8px; text-align: left; font-size: 11px; text-transform: uppercase; }
   td { padding: 8px; border-bottom: 1px solid #e0e0e0; }
   tr:nth-child(even) { background: #f8f9fc; }
   .below { color: #c0392b; font-weight: 600; }
   .above { color: #27ae60; font-weight: 600; }
+  .terms-section { margin: 20px 0; padding: 16px; background: #fafbff; border: 1px solid #e0e0e0; border-radius: 8px; }
+  .term-row { display: flex; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
+  .term-row:last-child { border-bottom: none; }
+  .term-icon { width: 20px; text-align: center; margin-right: 10px; font-weight: bold; }
+  .term-icon.good { color: #27ae60; }
+  .term-icon.warn { color: #c0392b; }
+  .term-icon.neutral { color: #999; }
+  .term-label { font-weight: 600; min-width: 200px; }
+  .term-value { color: #444; }
   .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #ccc; font-size: 11px; color: #888; }
 </style>
 </head>
@@ -25,7 +37,8 @@
 <p><strong>Payer:</strong> {{ contract.payer_name }} &nbsp;|&nbsp;
    <strong>Practice:</strong> {{ practice.name }} &nbsp;|&nbsp;
    <strong>ZIP:</strong> {{ practice.zip_code }} &nbsp;|&nbsp;
-   <strong>GPCI Locality:</strong> {{ practice.gpci_locality or 'N/A' }}</p>
+   <strong>GPCI Locality:</strong> {{ practice.gpci_locality or 'N/A' }}
+   {% if practice.specialty %} &nbsp;|&nbsp; <strong>Specialty:</strong> {{ practice.specialty }}{% endif %}</p>
 
 <div class="summary">
   <div class="stat-card">
@@ -60,7 +73,68 @@
     <div class="label">At/Above Medicare</div>
   </div>
   {% endif %}
+  {% if summary.estimated_annual_impact %}
+  <div class="impact-card">
+    <div class="value">${{ "{:,.0f}".format(summary.estimated_annual_impact) }}</div>
+    <div class="label">Est. Annual Impact</div>
+  </div>
+  {% endif %}
 </div>
+
+{% if contract.effective_date or contract.fee_schedule_type or contract.auto_renewal is not none %}
+<h2>Contract Terms</h2>
+<div class="terms-section">
+  {% if contract.effective_date %}
+  <div class="term-row">
+    <span class="term-icon neutral">-</span>
+    <span class="term-label">Effective Date</span>
+    <span class="term-value">{{ contract.effective_date }}</span>
+  </div>
+  {% endif %}
+  {% if contract.expiration_date %}
+  <div class="term-row">
+    <span class="term-icon neutral">-</span>
+    <span class="term-label">Expiration Date</span>
+    <span class="term-value">{{ contract.expiration_date }}</span>
+  </div>
+  {% endif %}
+  {% if contract.fee_schedule_type %}
+  <div class="term-row">
+    <span class="term-icon neutral">-</span>
+    <span class="term-label">Fee Schedule Type</span>
+    <span class="term-value">{{ contract.fee_schedule_type }}{% if contract.medicare_percentage %} ({{ contract.medicare_percentage }}% of Medicare){% endif %}</span>
+  </div>
+  {% endif %}
+  {% if contract.auto_renewal is not none %}
+  <div class="term-row">
+    <span class="term-icon {{ 'warn' if contract.auto_renewal else 'good' }}">{{ '!' if contract.auto_renewal else '+' }}</span>
+    <span class="term-label">Auto-Renewal</span>
+    <span class="term-value">{{ 'Yes' if contract.auto_renewal else 'No' }}{% if contract.auto_renewal and contract.termination_notice_days %} ({{ contract.termination_notice_days }}-day notice to terminate){% endif %}</span>
+  </div>
+  {% endif %}
+  {% if contract.unilateral_amendment is not none %}
+  <div class="term-row">
+    <span class="term-icon {{ 'warn' if contract.unilateral_amendment else 'good' }}">{{ '!' if contract.unilateral_amendment else '+' }}</span>
+    <span class="term-label">Unilateral Amendment</span>
+    <span class="term-value">{{ 'Yes — payer can change terms without consent' if contract.unilateral_amendment else 'No' }}</span>
+  </div>
+  {% endif %}
+  {% if contract.lesser_of_clause is not none %}
+  <div class="term-row">
+    <span class="term-icon {{ 'warn' if contract.lesser_of_clause else 'good' }}">{{ '!' if contract.lesser_of_clause else '+' }}</span>
+    <span class="term-label">Lesser-of Clause</span>
+    <span class="term-value">{{ 'Yes — pays lesser of billed charges or fee schedule' if contract.lesser_of_clause else 'No' }}</span>
+  </div>
+  {% endif %}
+  {% if contract.timely_filing_days %}
+  <div class="term-row">
+    <span class="term-icon {{ 'warn' if contract.timely_filing_days < 90 else 'good' }}">{{ '!' if contract.timely_filing_days < 90 else '+' }}</span>
+    <span class="term-label">Timely Filing</span>
+    <span class="term-value">{{ contract.timely_filing_days }} days{{ ' — shorter than industry standard 90 days' if contract.timely_filing_days < 90 else '' }}</span>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
 
 <h2>Rate Comparison</h2>
 <table>
@@ -110,6 +184,14 @@
 {% endfor %}
 </tbody>
 </table>
+{% endif %}
+
+{% if summary.estimated_annual_impact %}
+<div style="margin-top: 20px; padding: 12px; background: #fff5f5; border: 1px solid #e0c0c0; border-radius: 6px; font-size: 11px; color: #666;">
+  <strong style="color: #c0392b;">Estimated Annual Impact: ${{ "{:,.0f}".format(summary.estimated_annual_impact) }}</strong><br>
+  Based on national Medicare utilization data scaled to a solo practice (~1/10,000 of national volume).
+  Actual impact varies by practice size and payer mix. This is a directional estimate, not a financial guarantee.
+</div>
 {% endif %}
 
 <div class="footer">Generated by PayerIQ | Benchmarks: 2025 CMS PFS (GPCI-adjusted) + CLFS | Commercial: UHC Transparency in Coverage | Utilization: 2024 Medicare PSPS</div>

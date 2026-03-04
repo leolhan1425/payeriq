@@ -7,6 +7,7 @@ import PracticeSetup from './pages/PracticeSetup'
 import ContractUpload from './pages/ContractUpload'
 import RateReview from './pages/RateReview'
 import Report from './pages/Report'
+import Negotiation from './pages/Negotiation'
 import Landing from './pages/Landing'
 import Layout from './components/Layout'
 
@@ -30,6 +31,7 @@ function App() {
             <Route path="/contracts/new/upload" element={<ContractUpload />} />
             <Route path="/contracts/:id/review" element={<RateReview />} />
             <Route path="/contracts/:id/report" element={<Report />} />
+            <Route path="/contracts/:id/negotiate" element={<Negotiation />} />
           </Route>
         </Routes>
       </AuthProvider>

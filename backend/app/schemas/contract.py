@@ -1,3 +1,4 @@
+from datetime import date
 from pydantic import BaseModel
 
 
@@ -7,6 +8,16 @@ class ContractResponse(BaseModel):
     status: str
     error_message: str | None
     practice_id: int
+    effective_date: date | None = None
+    expiration_date: date | None = None
+    fee_schedule_type: str | None = None
+    medicare_percentage: float | None = None
+    auto_renewal: bool | None = None
+    unilateral_amendment: bool | None = None
+    termination_notice_days: int | None = None
+    lesser_of_clause: bool | None = None
+    timely_filing_days: int | None = None
+    extraction_confidence: float | None = None
 
     model_config = {"from_attributes": True}
 
@@ -26,6 +37,7 @@ class ContractRateResponse(BaseModel):
     national_avg_allowed: float | None
     commercial_avg_rate: float | None
     pct_of_commercial: float | None
+    extraction_confidence: float | None = None
 
     model_config = {"from_attributes": True}
 

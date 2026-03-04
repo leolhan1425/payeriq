@@ -124,4 +124,15 @@ def compare_contract_rates(contract_id: int, db: Session) -> dict:
     else:
         results["volume_weighted_pct"] = None
 
+    # --- Estimated annual revenue impact ---
+    # For each rate below Medicare with utilization data, estimate the annual
+    # dollar gap. Scale factor approximates a typical practice's share of
+    # national volume (solo ~1/10000, small group ~1/5000).
+    scale_factor = 1 / 10000  # conservative solo-practice default
+    annual_impact = 0.0
+    for r in matched_rates:
+        if r.variance and r.variance < 0 and r.national_volume and r.national_volume > 0:
+            annual_impact += abs(r.variance) * r.national_volume * scale_factor
+    results["estimated_annual_impact"] = round(annual_impact, 2) if annual_impact > 0 else None
+
     return results

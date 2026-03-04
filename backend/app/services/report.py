@@ -13,9 +13,6 @@ from app.models.practice import Practice
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 
 # Fix WeasyPrint library discovery on macOS with Homebrew.
-# WeasyPrint uses cffi.dlopen() which searches standard paths.
-# On macOS, Homebrew libs live in /opt/homebrew/lib and aren't in the default search path.
-# We patch cffi's ffi.dlopen to also try /opt/homebrew/lib/<name>.dylib variants.
 if sys.platform == "darwin":
     _brew_lib = "/opt/homebrew/lib"
     if os.path.isdir(_brew_lib):
@@ -28,16 +25,13 @@ if sys.platform == "darwin":
                 return _orig_dlopen(self, *args, **kwargs)
             except OSError:
                 name = args[0] if args else ""
-                # Try Homebrew path with .dylib extension
                 for suffix in [".dylib", ".0.dylib"]:
                     brew_path = os.path.join(_brew_lib, f"lib{name}{suffix}")
                     if os.path.exists(brew_path):
                         return _orig_dlopen(self, brew_path, **(kwargs or {}))
-                    # Also try the name as-is with .dylib
                     brew_path = os.path.join(_brew_lib, f"{name}.dylib")
                     if os.path.exists(brew_path):
                         return _orig_dlopen(self, brew_path, **(kwargs or {}))
-                # If name looks like libfoo-X.Y-Z, try libfoo-X.Y.Z.dylib
                 if isinstance(name, str) and "-" in name:
                     parts = name.rsplit("-", 1)
                     dylib_name = f"{parts[0]}.{parts[1]}.dylib"
@@ -75,6 +69,16 @@ def generate_report_html(contract_id: int, db: Session) -> str:
             summary["volume_weighted_pct"] = round(weighted / total_vol, 1)
         else:
             summary["volume_weighted_pct"] = None
+        # Revenue impact estimate
+        scale_factor = 1 / 10000
+        annual_impact = 0.0
+        for r in matched:
+            if r.variance and r.variance < 0 and r.national_volume and r.national_volume > 0:
+                annual_impact += abs(r.variance) * r.national_volume * scale_factor
+        summary["estimated_annual_impact"] = round(annual_impact, 2) if annual_impact > 0 else None
+    else:
+        summary["volume_weighted_pct"] = None
+        summary["estimated_annual_impact"] = None
     summary["matched_count"] = len(matched)
     summary["unmatched_count"] = len(unmatched)
 
